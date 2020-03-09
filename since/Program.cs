@@ -9,9 +9,9 @@ namespace since
   {
     static void Main(string[] args)
     {
-      const string pathOld = @"C:\dev\rhinocommon_version\5.11\RhinoCommon.dll";// @"C:\Program Files\Rhino 6\System\RhinoCommon.dll";
-      const string pathNew = @"C:\dev\rhinocommon_version\5.12\RhinoCommon.dll";//@"C:\Program Files\Rhino 7 WIP\System\RhinoCommon.dll";
-      const string sinceVersion = "5.12";
+      const string pathOld = @"..\..\..\rhinocommon_versions\6\6.25\RhinoCommon.dll";
+      const string pathNew = @"..\..\..\rhinocommon_versions\7.0\RhinoCommon.dll";
+      const string sinceVersion = "7.0";
       var newMembersTask = NewMembersAsync(pathOld, pathNew);
 
       int countFoundInSource = 0;
