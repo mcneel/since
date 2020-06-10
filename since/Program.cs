@@ -9,7 +9,7 @@ namespace since
   {
     static void Main(string[] args)
     {
-      const string pathOld = @"..\..\..\rhinocommon_versions\6\6.25\RhinoCommon.dll";
+      const string pathOld = @"..\..\..\rhinocommon_versions\6\6.26\RhinoCommon.dll";
       const string pathNew = @"..\..\..\rhinocommon_versions\7.0\RhinoCommon.dll";
       const string sinceVersion = "7.0";
       var newMembersTask = NewMembersAsync(pathOld, pathNew);
@@ -225,6 +225,43 @@ namespace since
           }
 
           string key = signature.ToString().ToLower().Replace("+",".");
+          items[key] = false;
+        }
+
+        var constructors = type.GetConstructors();
+        foreach(var constructor in constructors)
+        {
+          StringBuilder signature = new StringBuilder($"{type.FullName}");
+          signature.Append("(");
+          var parameters = constructor.GetParameters();
+          for (int i = 0; i < parameters.Length; i++)
+          {
+            if (i > 0)
+              signature.Append(",");
+            var ptype = parameters[i].ParameterType;
+            string name = ptype.Name.Replace("&", "");
+            if (ptype.IsGenericType && ptype.GenericTypeArguments.Length > 0)
+            //              if (name.Equals("IEnumerable`1"))
+            {
+              int index = name.IndexOf("`");
+
+              name = TweakTypeName(name.Substring(0, index)) + "<";
+              for (int j = 0; j < ptype.GenericTypeArguments.Length; j++)
+              {
+                if (j > 0)
+                  name += ",";
+                name += TweakTypeName(ptype.GenericTypeArguments[j].Name);
+              }
+              name += ">";
+            }
+            else
+              name = TweakTypeName(name);
+
+            signature.Append(name);
+          }
+          signature.Append(")");
+
+          string key = signature.ToString().ToLower().Replace("+", ".");
           items[key] = false;
         }
       }
