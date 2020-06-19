@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -9,11 +11,13 @@ namespace since
     {
         static void Main(string[] args)
         {
-            const string pathOld = @"..\..\..\rhinocommon_versions\6\6.26\RhinoCommon.dll";
+            //string[] directories = Directory.GetDirectories(@"..\..\..\rhinocommon_versions\6");
+
+            const string pathOld = @"..\..\..\rhinocommon_versions\6.26\RhinoCommon.dll";
             const string sinceVersion = "7.0";
             string pathNew = $"..\\..\\..\\rhinocommon_versions\\{sinceVersion}\\RhinoCommon.dll";
-            var newMembersTask = NewMembersAsync(pathOld, pathNew);
-
+            var modifiedMembersTask = ModifiedMembersAsync(pathOld, pathNew);
+            bool fileWritten = false;
             int countFoundInSource = 0;
             string rhinocommonDirectory = @"C:\dev\github\mcneel\rhino\src4\DotNetSDK\rhinocommon\dotnet\";
             foreach (var sourceFile in AllSourceFiles(rhinocommonDirectory))
@@ -25,18 +29,22 @@ namespace since
                 // Reverse so we walk backward through the source. This will allow us
                 // to use proper character offets as we insert strings
                 parsedItems.Reverse();
-                var newMembers = newMembersTask.Result;
+                var modifiedMembers = modifiedMembersTask.Result;
                 foreach (var parsedItem in parsedItems)
                 {
                     string signature = parsedItem.Signature.ToLower();
-                    if (!newMembers.ContainsKey(signature))
-                        continue;
-                    newMembers[signature] = true;
-                    countFoundInSource++;
 
-                    if (!parsedItem.HasSinceTag())
+                    ReflectedItem modifiedMember;
+                    if( !modifiedMembers.TryGetValue(signature, out modifiedMember))
+                        continue;
+                    modifiedMember.FoundInParsedCode = true;
+                    countFoundInSource++;
+                    //if (modifiedMember.AddedInNewVersion && modifiedMember.ObsoletedInNewVersion)
+                    //    throw new Exception("This looks sketchy");
+
+                    if (!parsedItem.HasSinceTag() && modifiedMember.AddedInNewVersion)
                     {
-                        int insertIndex = parsedItem.SinceInsertIndex();
+                        int insertIndex = parsedItem.TagInsertIndex();
                         StringBuilder since = new StringBuilder();
                         while (text[insertIndex - 1] == ' ')
                         {
@@ -47,22 +55,39 @@ namespace since
                         text = text.Insert(insertIndex, since.ToString());
                         modified = true;
                     }
+                    if (!parsedItem.HasDeprecatedTag() && modifiedMember.ObsoletedInNewVersion)
+                    {
+                        int insertIndex = parsedItem.TagInsertIndex();
+                        StringBuilder deprecated = new StringBuilder();
+                        while (text[insertIndex - 1] == ' ')
+                        {
+                            deprecated.Append(" ");
+                            insertIndex--;
+                        }
+                        deprecated.AppendLine($"/// <deprecated>{sinceVersion}</deprecated>");
+                        text = text.Insert(insertIndex, deprecated.ToString());
+                        modified = true;
+
+                    }
                 }
                 if (modified)
+                {
                     System.IO.File.WriteAllText(sourceFile, text);
+                    fileWritten = true;
+                }
             }
 
-            foreach (var kv in newMembersTask.Result)
+            foreach (var kv in modifiedMembersTask.Result)
             {
-                if (kv.Value == false)
+                if (kv.Value.FoundInParsedCode == false)
                 {
                     Console.WriteLine($"Missed {kv.Key}");
                 }
             }
 
-            Console.WriteLine($"{newMembersTask.Result.Keys.Count} new items");
+            Console.WriteLine($"{modifiedMembersTask.Result.Keys.Count} modified items");
             Console.WriteLine($"{countFoundInSource} found in source");
-
+            Console.WriteLine($"Any files written = {fileWritten}");
             Console.ReadKey();
         }
 
@@ -79,20 +104,44 @@ namespace since
             }
         }
 
-        static Task<Dictionary<string, bool>> NewMembersAsync(string oldAssemblyPath, string newAssemblyPath)
+        class ReflectedItem
+        {
+            public bool ObsoletedInNewVersion { get; set; } = false;
+            public bool AddedInNewVersion { get; set; } = false;
+            public bool FoundInParsedCode { get; set; } = false;
+        }
+
+        static Task<Dictionary<string, ReflectedItem>> ModifiedMembersAsync(string oldAssemblyPath, string newAssemblyPath)
         {
             return Task.Run(() =>
             {
                 var oldDict = AssemblyItems(oldAssemblyPath);
                 var newDict = AssemblyItems(newAssemblyPath);
 
-                Dictionary<string, bool> newItems = new Dictionary<string, bool>();
-                foreach (var key in newDict.Keys)
+                Dictionary<string, ReflectedItem> modifiedItems = new Dictionary<string, ReflectedItem>();
+                foreach(var kvp in newDict)
                 {
+                    string key = kvp.Key;
+                    bool isObsolete = kvp.Value;
+                    ReflectedItem item = new ReflectedItem();
+
+                    // if the item is not in oldDict, then it is new
                     if (!oldDict.ContainsKey(key))
-                        newItems[key] = false;
+                    {
+                        item.AddedInNewVersion = true;
+                        item.ObsoletedInNewVersion = kvp.Value;
+                    }
+                    else if(isObsolete)
+                    {
+                        bool obsoleteInOld = oldDict[key];
+                        if (!obsoleteInOld)
+                            item.ObsoletedInNewVersion = true;
+                    }
+
+                    if (item.ObsoletedInNewVersion || item.AddedInNewVersion)
+                        modifiedItems.Add(key, item);
                 }
-                return newItems;
+                return modifiedItems;
             });
         }
 
@@ -119,6 +168,11 @@ namespace since
             return name;
         }
 
+        /// <summary>
+        /// Get all public items in an assembly along with true/false if they are obsolete
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
         static Dictionary<string, bool> AssemblyItems(string path)
         {
             Dictionary<string, bool> items = new Dictionary<string, bool>();
@@ -128,19 +182,20 @@ namespace since
             Type[] types = assembly.GetExportedTypes();
             foreach (var type in types)
             {
+                bool isObsolete = (type.GetCustomAttribute(typeof(ObsoleteAttribute)) != null);
                 if (type.IsEnum)
                 {
                     string key = type.FullName.ToString().ToLower().Replace("+", ".");
-                    items[key] = false;
+                    items[key] = isObsolete;
                     continue;
                 }
-
                 var methods = type.GetMethods();
                 foreach (var method in methods)
                 {
                     if (method.DeclaringType != type)
                         continue;
                     StringBuilder signature = new StringBuilder($"{type.FullName}.{method.Name}");
+
                     if (method.IsSpecialName)
                     {
                         string name = method.Name;
@@ -232,7 +287,7 @@ namespace since
                     }
 
                     string key = signature.ToString().ToLower().Replace("+", ".");
-                    items[key] = false;
+                    items[key] = isObsolete;
                 }
 
                 var constructors = type.GetConstructors();
@@ -269,7 +324,7 @@ namespace since
                     signature.Append(")");
 
                     string key = signature.ToString().ToLower().Replace("+", ".");
-                    items[key] = false;
+                    items[key] = isObsolete;
                 }
             }
             return items;

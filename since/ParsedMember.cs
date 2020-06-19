@@ -18,8 +18,13 @@ namespace since
             bool exists = (Documentation != null && Documentation.Content.ToFullString().Contains("<since>"));
             return exists;
         }
+        public bool HasDeprecatedTag()
+        {
+            bool exists = (Documentation != null && Documentation.Content.ToFullString().Contains("<deprecated>"));
+            return exists;
+        }
 
-        public int SinceInsertIndex()
+        public int TagInsertIndex()
         {
             int rc = Member.SpanStart;
             return rc;
