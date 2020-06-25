@@ -182,11 +182,11 @@ namespace since
             Type[] types = assembly.GetExportedTypes();
             foreach (var type in types)
             {
-                bool isObsolete = (type.GetCustomAttribute(typeof(ObsoleteAttribute)) != null);
+                bool typeIsObsolete = (type.GetCustomAttribute(typeof(ObsoleteAttribute)) != null);
                 if (type.IsEnum)
                 {
                     string key = type.FullName.ToString().ToLower().Replace("+", ".");
-                    items[key] = isObsolete;
+                    items[key] = typeIsObsolete;
                     continue;
                 }
                 var methods = type.GetMethods();
@@ -194,6 +194,9 @@ namespace since
                 {
                     if (method.DeclaringType != type)
                         continue;
+
+                    bool methodIsObsolete = (method.GetCustomAttribute(typeof(ObsoleteAttribute)) != null);
+
                     StringBuilder signature = new StringBuilder($"{type.FullName}.{method.Name}");
 
                     if (method.IsSpecialName)
@@ -287,12 +290,14 @@ namespace since
                     }
 
                     string key = signature.ToString().ToLower().Replace("+", ".");
-                    items[key] = isObsolete;
+                    items[key] = typeIsObsolete || methodIsObsolete;
                 }
 
                 var constructors = type.GetConstructors();
                 foreach (var constructor in constructors)
                 {
+                    bool constructorIsObsolete = (constructor.GetCustomAttribute(typeof(ObsoleteAttribute)) != null);
+
                     StringBuilder signature = new StringBuilder($"{type.FullName}");
                     signature.Append("(");
                     var parameters = constructor.GetParameters();
@@ -324,7 +329,7 @@ namespace since
                     signature.Append(")");
 
                     string key = signature.ToString().ToLower().Replace("+", ".");
-                    items[key] = isObsolete;
+                    items[key] = typeIsObsolete || constructorIsObsolete;
                 }
             }
             return items;
