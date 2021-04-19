@@ -13,8 +13,8 @@ namespace since
         {
             //string[] directories = Directory.GetDirectories(@"..\..\..\rhinocommon_versions\6");
 
-            const string pathOld = @"..\..\..\rhinocommon_versions\6.29\RhinoCommon.dll";
-            const string sinceVersion = "7.0";
+            const string pathOld = @"..\..\..\rhinocommon_versions\7.4\RhinoCommon.dll";
+            const string sinceVersion = "7.5";
             string pathNew = $"..\\..\\..\\rhinocommon_versions\\{sinceVersion}\\RhinoCommon.dll";
             var modifiedMembersTask = ModifiedMembersAsync(pathOld, pathNew);
             bool fileWritten = false;
