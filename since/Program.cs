@@ -13,14 +13,14 @@ namespace since
         {
             //string[] directories = Directory.GetDirectories(@"..\..\..\rhinocommon_versions\6");
 
-            const string pathOld = @"..\..\..\rhinocommon_versions\8.17\RhinoCommon.dll";
-            const string sinceVersion = "8.18";
+            const string pathOld = @"..\..\..\rhinocommon_versions\8.26\RhinoCommon.dll";
+            const string sinceVersion = "9.0";
             string pathNew = $"..\\..\\..\\rhinocommon_versions\\{sinceVersion}\\RhinoCommon.dll";
             //const string pathNew = @"..\..\..\rhinocommon_versions\7.30\RhinoCommon.dll";
             var modifiedMembersTask = ModifiedMembersAsync(pathOld, pathNew);
             bool fileWritten = false;
             int countFoundInSource = 0;
-            string rhinocommonDirectory = @"C:\dev\github\mcneelv8\rhino\src4\DotNetSDK\rhinocommon\dotnet\";
+            string rhinocommonDirectory = @"C:\dev\github\mcneelv9\rhino\src4\DotNetSDK\rhinocommon\dotnet\";
             foreach (var sourceFile in AllSourceFiles(rhinocommonDirectory))
             {
                 bool modified = false;
